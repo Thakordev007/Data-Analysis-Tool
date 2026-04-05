@@ -135,6 +135,49 @@ body.dark .upload-box h2 {
   background: #2563eb;
 }
 
+.upload-box select {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  font-size: 0.95rem;
+  min-width: 200px;
+}
+
+body.dark .upload-box select {
+  background: #111827;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+.upload-box .hint {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.4;
+}
+
+body.dark .upload-box .hint {
+  color: #94a3b8;
+}
+
+.chart-empty {
+  color: #b45309;
+  background: #fffbeb;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+body.dark .chart-empty {
+  background: #422006;
+  color: #fcd34d;
+}
+
 .summary {
   margin: 2rem 0;
   display: grid;
@@ -200,6 +243,47 @@ table th, table td {
 table th {
   background: #f0f4ff;
   font-weight: 600;
+}
+
+#previewTable th.col-highlight,
+#previewTable td.col-highlight {
+  background-color: #fef08a !important;
+  color: #1e293b !important;
+  font-weight: 600;
+}
+
+body.dark #previewTable th.col-highlight,
+body.dark #previewTable td.col-highlight {
+  background-color: #854d0e !important;
+  color: #fef9c3 !important;
+}
+
+.preview-note {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #64748b;
+}
+
+body.dark .preview-note {
+  color: #94a3b8;
+}
+
+.chart-caption {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+body.dark .chart-caption {
+  color: #cbd5e1;
+}
+
+.chart-card canvas {
+  max-height: 280px;
+}
+
+.chart-card-pie canvas {
+  max-height: 320px;
 }
 
 body.dark table th {
