@@ -6,13 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <header>
   <h1>📊 Smart Data Analysis Tool</h1>
   <div class="header-buttons">
-    <button class="toggle-btn" onclick="toggleDarkMode()">🌙 Dark Mode</button>
-    <button class="refresh-btn" onclick="window.location.href='/reset'">🔄 Refresh</button>
+    <button type="button" class="toggle-btn" onclick="toggleDarkMode()">🌙 Dark Mode</button>
+    <button type="button" class="refresh-btn" onclick="window.location.href='/reset'">🔄 Refresh</button>
   </div>
 </header>
 
@@ -22,23 +23,24 @@
     <form method="POST" enctype="multipart/form-data">
       <label class="custom-file-label" for="fileInput">Choose File</label>
       <input type="file" name="file" id="fileInput" required>
-      
+
       {% if all_cols %}
-        <label for="column">Select Column:</label>
-        <select name="column">
+        <label for="columnSelect">Column filter (highlight + live charts):</label>
+        <select name="column" id="columnSelect">
           {% for col in all_cols %}
             <option value="{{ col }}" {% if col == selected_col %}selected{% endif %}>{{ col }}</option>
           {% endfor %}
         </select>
+        
       {% endif %}
-      
+
       <br>
       <button type="submit">Analyze Data</button>
     </form>
     <p style="margin-top:10px; font-size:0.9rem; color:gray;">Or drag & drop your file here</p>
   </section>
 
-  {% if tables %}
+  {% if preview_records and all_cols %}
   <section class="summary">
     <div class="card">
       <h3>📂 Rows</h3>
@@ -59,35 +61,43 @@
   </section>
 
   <section class="result">
-    <h2>📑 Data Preview</h2>
+    <h2>📑 Data Preview <span class="preview-note">(pehli {{ preview_records|length }} rows)</span></h2>
     <div class="table-container">
-      {{ tables[0] | safe }}
+      <table class="data" id="previewTable">
+        <thead>
+          <tr>
+            {% for col in all_cols %}
+            <th data-col="{{ col|e }}">{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview_records %}
+          <tr>
+            {% for col in all_cols %}
+            <td data-col="{{ col|e }}">{% if row.get(col) is not none %}{{ row.get(col) }}{% else %}null{% endif %}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
-    <h2>📈 Charts</h2>
+    <h2>📈 Live charts <span class="preview-note">(poori file se counts / bins)</span></h2>
+    <p id="chartEmpty" class="chart-empty" hidden>Is column mein chart ke liye kaafi non-empty values nahi hain.</p>
     <div class="charts">
-
-      {% if bar_chart %}
       <div class="chart-card">
-        <img src="{{ bar_chart }}?v={{ uuid.uuid4() }}" alt="Bar Chart">
-        <p>Bar Chart of {{ selected_col }}</p>
+        <canvas id="barChart" aria-label="Bar chart"></canvas>
+        <p class="chart-caption">Bar — <span id="barCaptionCol"></span></p>
       </div>
-      {% endif %}
-
-      {% if line_chart %}
       <div class="chart-card">
-        <img src="{{ line_chart }}?v={{ uuid.uuid4() }}" alt="Line Chart">
-        <p>Line Chart of {{ selected_col }}</p>
+        <canvas id="lineChart" aria-label="Line chart"></canvas>
+        <p class="chart-caption">Line — <span id="lineCaptionCol"></span></p>
       </div>
-      {% endif %}
-
-      {% if pie_chart %}
-      <div class="chart-card">
-        <img src="{{ pie_chart }}?v={{ uuid.uuid4() }}" alt="Pie Chart">
-        <p>Pie Chart of {{ selected_col }}</p>
+      <div class="chart-card chart-card-pie">
+        <canvas id="pieChart" aria-label="Pie chart"></canvas>
+        <p class="chart-caption">Pie — <span id="pieCaptionCol"></span></p>
       </div>
-      {% endif %}
-
     </div>
   </section>
   {% endif %}
@@ -108,18 +118,190 @@
     </div>
     <div class="footer-section">
       <h3>Contact</h3>
-      <p>Email: dev@gmail.com</p>
+      <p>Email: dt121820@gmail.com</p>
       <p>Phone: +91 54135 45138</p>
     </div>
     <div class="footer-section">
       <h3>Follow Us</h3>
-      <a href="#">🌐 LinkedIn</a>
-      <a href="#">🐦 Twitter</a>
-      <a href="#">📘 Facebook</a>
-      <a href="#">👻 GitHub</a>
+      <a href="https://www.linkdin.com/in/dev-thakor-0a2477298">🌐 LinkedIn</a>
+      <a href="https://github.com/Thakordev007">👻 GitHub</a>
     </div>
   </div>
 </footer>
+
+{% if preview_records and all_cols %}
+<script>
+  const CHART_DATA_BY_COL = {{ chart_data_full | tojson }};
+
+  function chartTextColor() {
+    return document.body.classList.contains('dark') ? '#e5e7eb' : '#334155';
+  }
+  function chartGridColor() {
+    return document.body.classList.contains('dark') ? 'rgba(148,163,184,0.2)' : 'rgba(0,0,0,0.06)';
+  }
+
+  let barChartInst = null;
+  let lineChartInst = null;
+  let pieChartInst = null;
+
+  function highlightColumn(col) {
+    document.querySelectorAll('#previewTable [data-col]').forEach(function (el) {
+      el.classList.toggle('col-highlight', el.getAttribute('data-col') === col);
+    });
+  }
+
+  function destroyCharts() {
+    if (barChartInst) { barChartInst.destroy(); barChartInst = null; }
+    if (lineChartInst) { lineChartInst.destroy(); lineChartInst = null; }
+    if (pieChartInst) { pieChartInst.destroy(); pieChartInst = null; }
+  }
+
+  function updateChartsForColumn(col) {
+    const payload = CHART_DATA_BY_COL[col] || { labels: [], counts: [] };
+    const labels = payload.labels || [];
+    const counts = payload.counts || [];
+    const emptyEl = document.getElementById('chartEmpty');
+    const hasData = labels.length > 0 && counts.some(function (n) { return n > 0; });
+
+    document.getElementById('barCaptionCol').textContent = col;
+    document.getElementById('lineCaptionCol').textContent = col;
+    document.getElementById('pieCaptionCol').textContent = col;
+
+    if (!hasData) {
+      emptyEl.hidden = false;
+      destroyCharts();
+      return;
+    }
+    emptyEl.hidden = true;
+
+    const commonOpts = {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+      },
+    };
+
+    destroyCharts();
+
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    barChartInst = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Count',
+          data: counts,
+          backgroundColor: 'rgba(56, 189, 248, 0.65)',
+          borderColor: 'rgba(14, 165, 233, 1)',
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        ...commonOpts,
+        scales: {
+          x: {
+            ticks: { color: chartTextColor(), maxRotation: 50, minRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+            grid: { color: chartGridColor() },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: chartTextColor() },
+            grid: { color: chartGridColor() },
+          },
+        },
+        plugins: {
+          ...commonOpts.plugins,
+          tooltip: { enabled: true },
+        },
+      },
+    });
+
+    const lineCtx = document.getElementById('lineChart').getContext('2d');
+    lineChartInst = new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Count',
+          data: counts,
+          borderColor: 'rgba(249, 115, 22, 1)',
+          backgroundColor: 'rgba(251, 146, 60, 0.2)',
+          tension: 0.25,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        }],
+      },
+      options: {
+        ...commonOpts,
+        scales: {
+          x: {
+            ticks: { color: chartTextColor(), maxRotation: 50, minRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+            grid: { color: chartGridColor() },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: chartTextColor() },
+            grid: { color: chartGridColor() },
+          },
+        },
+      },
+    });
+
+    const pieCtx = document.getElementById('pieChart').getContext('2d');
+    const pieColors = [
+      'rgba(99, 102, 241, 0.85)', 'rgba(236, 72, 153, 0.85)', 'rgba(34, 197, 94, 0.85)',
+      'rgba(234, 179, 8, 0.85)', 'rgba(14, 165, 233, 0.85)', 'rgba(168, 85, 247, 0.85)',
+      'rgba(239, 68, 68, 0.85)', 'rgba(20, 184, 166, 0.85)', 'rgba(251, 146, 60, 0.85)', 'rgba(148, 163, 184, 0.85)',
+    ];
+    pieChartInst = new Chart(pieCtx, {
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: counts,
+          backgroundColor: labels.map(function (_, i) { return pieColors[i % pieColors.length]; }),
+          borderWidth: 1,
+          borderColor: document.body.classList.contains('dark') ? '#1f2937' : '#fff',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: { color: chartTextColor(), boxWidth: 12, font: { size: 10 } },
+          },
+          tooltip: { enabled: true },
+        },
+      },
+    });
+  }
+
+  function applyColumnSelection(col) {
+    highlightColumn(col);
+    updateChartsForColumn(col);
+  }
+
+  function initDashboard() {
+    const sel = document.getElementById('columnSelect');
+    if (!sel) return;
+    applyColumnSelection(sel.value);
+    sel.addEventListener('change', function () {
+      applyColumnSelection(sel.value);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  } else {
+    initDashboard();
+  }
+</script>
+{% endif %}
 
 <script>
   function toggleDarkMode() {
@@ -129,6 +311,10 @@
       btn.textContent = "☀️ Light Mode";
     } else {
       btn.textContent = "🌙 Dark Mode";
+    }
+    if (typeof applyColumnSelection === 'function') {
+      const sel = document.getElementById('columnSelect');
+      if (sel) applyColumnSelection(sel.value);
     }
   }
 </script>
